@@ -1,0 +1,116 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { MailFilters } from "@/components/mail-filters";
+import { MailList } from "@/components/mail-list";
+import { Pagination } from "@/components/pagination";
+import type { Database } from "@/types/database";
+
+type Mail = Database["public"]["Tables"]["mails"]["Row"];
+
+export default function DashboardPage() {
+  const [mails, setMails] = useState<Mail[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const limit = 50;
+
+  // フィルター
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [priority, setPriority] = useState("");
+  const [status, setStatus] = useState("");
+
+  // TODO: 認証後にテナントIDを取得する。仮の値。
+  const tenantId = "demo-tenant-id";
+
+  const fetchMails = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      tenant_id: tenantId,
+      page: String(page),
+      limit: String(limit),
+    });
+    if (query) params.set("q", query);
+    if (category) params.set("category", category);
+    if (priority) params.set("priority", priority);
+    if (status) params.set("status", status);
+
+    try {
+      const res = await fetch(`/api/mails?${params}`);
+      const data = await res.json();
+      setMails(data.mails || []);
+      setTotal(data.total || 0);
+    } catch (error) {
+      console.error("Failed to fetch mails:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantId, page, query, category, priority, status]);
+
+  useEffect(() => {
+    fetchMails();
+  }, [fetchMails]);
+
+  // 検索はデバウンス
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, category, priority, status]);
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      await fetch(`/api/mails/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setMails((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, status: newStatus } : m))
+      );
+    } catch (error) {
+      console.error("Failed to update status:", error);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+          <h1 className="text-xl font-bold text-gray-900">MailSort</h1>
+          <nav className="flex gap-4 text-sm">
+            <a href="/dashboard" className="font-medium text-blue-600">ダッシュボード</a>
+            <a href="/settings" className="text-gray-600 hover:text-gray-900">設定</a>
+          </nav>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
+        <MailFilters
+          query={query}
+          category={category}
+          priority={priority}
+          status={status}
+          onQueryChange={setQuery}
+          onCategoryChange={setCategory}
+          onPriorityChange={setPriority}
+          onStatusChange={setStatus}
+        />
+
+        {loading ? (
+          <div className="py-12 text-center text-gray-500">読み込み中...</div>
+        ) : (
+          <>
+            <MailList mails={mails} onStatusChange={handleStatusChange} />
+            <Pagination page={page} total={total} limit={limit} onPageChange={setPage} />
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
