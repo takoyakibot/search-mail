@@ -28,7 +28,8 @@ export async function PATCH(
   const body = await request.json();
 
   const allowedFields = ["status", "category", "priority", "action_required", "tags"];
-  const updates: Record<string, unknown> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updates: Record<string, any> = {};
   for (const field of allowedFields) {
     if (field in body) {
       updates[field] = body[field];
