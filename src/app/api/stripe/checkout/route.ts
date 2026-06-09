@@ -4,6 +4,10 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { createSupabaseServer } from "@/lib/supabase/auth-server";
 
 export async function POST(request: NextRequest) {
+  if (!stripe) {
+    return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
+  }
+
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
