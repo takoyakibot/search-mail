@@ -30,7 +30,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // 認証不要なパス
-  const publicPaths = ["/", "/login", "/register", "/api/mail/receive"];
+  const publicPaths = ["/", "/login", "/register", "/api/mail/receive", "/api/auth/register"];
   const isPublic = publicPaths.some(
     (p) => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith("/api/mail/")
   ) || request.nextUrl.pathname.startsWith("/api/import/microsoft/callback")
