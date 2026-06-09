@@ -1,16 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function ImportPage() {
+function ImportNotification() {
   const searchParams = useSearchParams();
   const success = searchParams.get("success");
   const importedCount = searchParams.get("imported");
   const skippedCount = searchParams.get("skipped");
   const error = searchParams.get("error");
 
+  return (
+    <>
+      {success && (
+        <div className="rounded-md bg-green-50 p-4 text-sm text-green-800">
+          {success === "microsoft" ? "Microsoft" : "Google"} から{importedCount}件インポートしました
+          （{skippedCount}件スキップ）
+        </div>
+      )}
+      {error && (
+        <div className="rounded-md bg-red-50 p-4 text-sm text-red-800">
+          エラーが発生しました: {error}
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function ImportPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     imported: number;
@@ -85,18 +103,9 @@ export default function ImportPage() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-        {/* OAuth結果の通知 */}
-        {success && (
-          <div className="rounded-md bg-green-50 p-4 text-sm text-green-800">
-            {success === "microsoft" ? "Microsoft" : "Google"} から{importedCount}件インポートしました
-            （{skippedCount}件スキップ）
-          </div>
-        )}
-        {error && (
-          <div className="rounded-md bg-red-50 p-4 text-sm text-red-800">
-            エラーが発生しました: {error}
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <ImportNotification />
+        </Suspense>
 
         {/* 1. ファイルアップロード */}
         <section className="rounded-lg border border-gray-200 bg-white p-6">
