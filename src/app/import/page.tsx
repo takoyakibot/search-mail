@@ -190,7 +190,7 @@ export default function ImportPage() {
             </div>
             <div>
               <h3 className="font-medium text-gray-900">Gmail（Google Takeout）</h3>
-              <p>takeout.google.com にアクセス &gt; 「メール」のみ選択 &gt; エクスポート。MBOX形式でダウンロードされます。</p>
+              <p><a href="https://takeout.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">takeout.google.com</a> にアクセス &gt; 「メール」のみ選択 &gt; エクスポート。MBOX形式でダウンロードされます。</p>
             </div>
           </div>
         </section>
