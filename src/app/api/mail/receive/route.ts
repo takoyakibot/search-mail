@@ -96,8 +96,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save mail" }, { status: 500 });
     }
 
-    // 添付ファイルの保存（Phase 1: Storage に保存のみ）
+    // 保存したメールのIDを取得
+    const { data: savedMail } = await supabaseAdmin
+      .from("mails")
+      .select("id")
+      .eq("message_id", messageId)
+      .single();
+
+    // 添付ファイルの保存 + 非同期解析キック
     const attachmentCount = parseInt((formData.get("attachments") as string) || "0", 10);
+    const attachmentIds: string[] = [];
+
     for (let i = 1; i <= attachmentCount; i++) {
       const file = formData.get(`attachment${i}`) as File | null;
       if (!file) continue;
@@ -109,14 +118,7 @@ export async function POST(request: NextRequest) {
         .from("attachments")
         .upload(storagePath, buffer, { contentType: file.type });
 
-      // attachments テーブルにメタ情報のみ保存
-      const mailResult = await supabaseAdmin
-        .from("mails")
-        .select("id")
-        .eq("message_id", messageId)
-        .single();
-
-      if (mailResult.data) {
+      if (savedMail) {
         const fileExt = file.name.split(".").pop()?.toLowerCase();
         const fileType =
           fileExt === "xlsx" || fileExt === "xls"
@@ -127,15 +129,34 @@ export async function POST(request: NextRequest) {
                 ? "word"
                 : "other";
 
-        await supabaseAdmin.from("attachments").insert({
-          mail_id: mailResult.data.id,
-          tenant_id: tenant.id,
-          file_name: file.name,
-          file_type: fileType,
-          storage_path: storagePath,
-          status: "pending",
-        });
+        const { data: inserted } = await supabaseAdmin
+          .from("attachments")
+          .insert({
+            mail_id: savedMail.id,
+            tenant_id: tenant.id,
+            file_name: file.name,
+            file_type: fileType,
+            storage_path: storagePath,
+            status: "pending",
+          })
+          .select("id")
+          .single();
+
+        if (inserted) attachmentIds.push(inserted.id);
       }
+    }
+
+    // 添付ファイル解析を非同期でキック（レスポンスをブロックしない）
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    for (const attId of attachmentIds) {
+      fetch(`${appUrl}/api/attachments/process`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ attachmentId: attId }),
+      }).catch((err) => console.error("Failed to kick attachment processing:", err));
     }
 
     return NextResponse.json({ message: "Mail received and classified" }, { status: 200 });

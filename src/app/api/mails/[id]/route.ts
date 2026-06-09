@@ -1,16 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { createSupabaseServer } from "@/lib/supabase/auth-server";
+
+async function getAuthenticatedTenantId(): Promise<string | null> {
+  const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("tenant_id")
+    .eq("id", user.id)
+    .single();
+
+  return profile?.tenant_id || null;
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const tenantId = await getAuthenticatedTenantId();
+  if (!tenantId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await params;
 
   const { data, error } = await supabaseAdmin
     .from("mails")
     .select("*")
     .eq("id", id)
+    .eq("tenant_id", tenantId)
     .single();
 
   if (error || !data) {
@@ -24,6 +45,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const tenantId = await getAuthenticatedTenantId();
+  if (!tenantId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await params;
   const body = await request.json();
 
@@ -44,6 +70,7 @@ export async function PATCH(
     .from("mails")
     .update(updates)
     .eq("id", id)
+    .eq("tenant_id", tenantId)
     .select()
     .single();
 

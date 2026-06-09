@@ -1,33 +1,31 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MailFilters } from "@/components/mail-filters";
 import { MailList } from "@/components/mail-list";
 import { Pagination } from "@/components/pagination";
+import { createSupabaseBrowser } from "@/lib/supabase/browser";
 import type { Database } from "@/types/database";
 
 type Mail = Database["public"]["Tables"]["mails"]["Row"];
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [mails, setMails] = useState<Mail[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const limit = 50;
 
-  // フィルター
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [priority, setPriority] = useState("");
   const [status, setStatus] = useState("");
 
-  // TODO: 認証後にテナントIDを取得する。仮の値。
-  const tenantId = "demo-tenant-id";
-
   const fetchMails = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({
-      tenant_id: tenantId,
       page: String(page),
       limit: String(limit),
     });
@@ -38,6 +36,10 @@ export default function DashboardPage() {
 
     try {
       const res = await fetch(`/api/mails?${params}`);
+      if (res.status === 401) {
+        router.push("/login");
+        return;
+      }
       const data = await res.json();
       setMails(data.mails || []);
       setTotal(data.total || 0);
@@ -46,13 +48,12 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, page, query, category, priority, status]);
+  }, [page, query, category, priority, status, router]);
 
   useEffect(() => {
     fetchMails();
   }, [fetchMails]);
 
-  // 検索はデバウンス
   const [debouncedQuery, setDebouncedQuery] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300);
@@ -78,14 +79,23 @@ export default function DashboardPage() {
     }
   };
 
+  const handleLogout = async () => {
+    const supabase = createSupabaseBrowser();
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <h1 className="text-xl font-bold text-gray-900">MailSort</h1>
-          <nav className="flex gap-4 text-sm">
+          <nav className="flex items-center gap-4 text-sm">
             <a href="/dashboard" className="font-medium text-blue-600">ダッシュボード</a>
             <a href="/settings" className="text-gray-600 hover:text-gray-900">設定</a>
+            <button onClick={handleLogout} className="text-gray-500 hover:text-gray-700">
+              ログアウト
+            </button>
           </nav>
         </div>
       </header>
