@@ -1,4 +1,5 @@
 import { simpleParser, type ParsedMail } from "mailparser";
+import crypto from "crypto";
 import { classifyMail } from "@/lib/classify-mail";
 
 export type ParsedEmailData = {
@@ -32,8 +33,12 @@ export async function parseEml(raw: Buffer | string): Promise<ParsedEmailData> {
     content: att.content,
   }));
 
+  // messageId がない場合はハッシュで生成
+  const messageId = parsed.messageId
+    || `hash-${crypto.createHash("sha256").update(`${parsed.subject || ""}|${sender}|${parsed.date?.toISOString() || ""}|${bodyText.slice(0, 200)}`).digest("hex").slice(0, 16)}`;
+
   return {
-    messageId: parsed.messageId || null,
+    messageId,
     subject: parsed.subject || "(件名なし)",
     sender,
     senderName: extractSenderName(sender),
