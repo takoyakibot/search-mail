@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { classifyMail } from "@/lib/classify-mail";
+import { getAppUrl } from "@/lib/app-url";
 
 function stripHtml(html: string): string {
   return html
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 添付ファイル解析を非同期でキック（レスポンスをブロックしない）
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
     for (const attId of attachmentIds) {
       fetch(`${appUrl}/api/attachments/process`, {
         method: "POST",

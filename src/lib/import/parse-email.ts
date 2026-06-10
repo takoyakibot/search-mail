@@ -1,6 +1,7 @@
 import { simpleParser, type ParsedMail } from "mailparser";
 import crypto from "crypto";
 import { classifyMail } from "@/lib/classify-mail";
+import { getAppUrl } from "@/lib/app-url";
 
 export type ParsedEmailData = {
   messageId: string | null;
@@ -131,7 +132,7 @@ export async function classifyAndSave(
 
     // 非同期解析キック
     if (inserted) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const appUrl = getAppUrl();
       fetch(`${appUrl}/api/attachments/process`, {
         method: "POST",
         headers: {

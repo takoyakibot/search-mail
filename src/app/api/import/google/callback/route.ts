@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { getAppUrl } from "@/lib/app-url";
 import { parseEml, classifyAndSave } from "@/lib/import/parse-email";
 
 async function exchangeCodeForToken(code: string): Promise<{ access_token: string }> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
   const redirectUri = `${appUrl}/api/import/google/callback`;
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
     return NextResponse.redirect(
       `${appUrl}/import?success=google&imported=${imported}&skipped=${skipped}`
     );

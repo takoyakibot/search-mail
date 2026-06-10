@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase/auth-server";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function GET() {
   const supabase = await createSupabaseServer();
@@ -14,7 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: "Microsoft連携が設定されていません" }, { status: 503 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
   const redirectUri = `${appUrl}/api/import/microsoft/callback`;
   const scope = "https://graph.microsoft.com/Mail.Read offline_access";
 
