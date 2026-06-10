@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { Header } from "@/components/header";
 
 function ImportNotification() {
   const searchParams = useSearchParams();
@@ -156,16 +156,7 @@ export default function ImportPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold text-gray-900">MailSort</h1>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">ダッシュボード</Link>
-            <Link href="/import" className="font-medium text-blue-600">インポート</Link>
-            <Link href="/settings" className="text-gray-600 hover:text-gray-900">設定</Link>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
         <Suspense fallback={null}>

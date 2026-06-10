@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Header } from "@/components/header";
 import { MailFilters } from "@/components/mail-filters";
 import { MailList } from "@/components/mail-list";
 import { Pagination } from "@/components/pagination";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
 import type { Database } from "@/types/database";
 
 type Mail = Database["public"]["Tables"]["mails"]["Row"];
@@ -79,27 +79,9 @@ export default function DashboardPage() {
     }
   };
 
-  const handleLogout = async () => {
-    const supabase = createSupabaseBrowser();
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold text-gray-900">MailSort</h1>
-          <nav className="flex items-center gap-4 text-sm">
-            <a href="/dashboard" className="font-medium text-blue-600">ダッシュボード</a>
-            <a href="/import" className="text-gray-600 hover:text-gray-900">インポート</a>
-            <a href="/settings" className="text-gray-600 hover:text-gray-900">設定</a>
-            <button onClick={handleLogout} className="text-gray-500 hover:text-gray-700">
-              ログアウト
-            </button>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
         <MailFilters

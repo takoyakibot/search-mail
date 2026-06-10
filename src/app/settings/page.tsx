@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowser } from "@/lib/supabase/browser";
+import { Header } from "@/components/header";
 
 type TenantInfo = {
   tenantId: string;
@@ -32,31 +32,13 @@ export default function SettingsPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  const handleLogout = async () => {
-    const supabase = createSupabaseBrowser();
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
-
   if (loading) {
     return <div className="flex min-h-screen items-center justify-center text-gray-500">読み込み中...</div>;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold text-gray-900">MailSort</h1>
-          <nav className="flex items-center gap-4 text-sm">
-            <a href="/dashboard" className="text-gray-600 hover:text-gray-900">ダッシュボード</a>
-            <a href="/import" className="text-gray-600 hover:text-gray-900">インポート</a>
-            <a href="/settings" className="font-medium text-blue-600">設定</a>
-            <button onClick={handleLogout} className="text-gray-500 hover:text-gray-700">
-              ログアウト
-            </button>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-6">
         <h2 className="text-lg font-semibold text-gray-900">テナント設定</h2>
