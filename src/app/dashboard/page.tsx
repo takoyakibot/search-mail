@@ -23,13 +23,23 @@ export default function DashboardPage() {
   const [priority, setPriority] = useState("");
   const [status, setStatus] = useState("");
 
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, category, priority, status]);
+
   const fetchMails = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({
       page: String(page),
       limit: String(limit),
     });
-    if (query) params.set("q", query);
+    if (debouncedQuery) params.set("q", debouncedQuery);
     if (category) params.set("category", category);
     if (priority) params.set("priority", priority);
     if (status) params.set("status", status);
@@ -48,21 +58,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, query, category, priority, status, router]);
+  }, [page, debouncedQuery, category, priority, status, router]);
 
   useEffect(() => {
     fetchMails();
   }, [fetchMails]);
-
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedQuery, category, priority, status]);
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
