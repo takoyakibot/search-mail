@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -28,39 +28,102 @@ function ImportNotification() {
   );
 }
 
+const BATCH_SIZE = 10;
+
+function splitMbox(text: string): string[] {
+  // MBOX format: each message starts with "From " at the beginning of a line
+  const parts = text.split(/^From /m).filter((chunk) => chunk.trim());
+  return parts.map((chunk) => "From " + chunk);
+}
+
 export default function ImportPage() {
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0, imported: 0, skipped: 0, failed: 0 });
   const [uploadResult, setUploadResult] = useState<{
     imported: number;
     skipped: number;
     failed: number;
-    errors: string[];
   } | null>(null);
+  const abortRef = useRef(false);
 
   const handleFileUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setUploading(true);
     setUploadResult(null);
+    abortRef.current = false;
 
     const formData = new FormData(e.currentTarget);
+    const files = formData.getAll("files") as File[];
+
+    if (files.length === 0) {
+      setUploading(false);
+      return;
+    }
+
+    const totals = { imported: 0, skipped: 0, failed: 0 };
 
     try {
-      const res = await fetch("/api/import/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
+      // 全ファイルからメールを抽出
+      const allEmails: string[] = [];
 
-      if (res.ok) {
-        setUploadResult(data);
-      } else {
-        setUploadResult({ imported: 0, skipped: 0, failed: 1, errors: [data.error] });
+      for (const file of files) {
+        const text = await file.text();
+        const fileName = file.name.toLowerCase();
+
+        if (fileName.endsWith(".eml")) {
+          allEmails.push(text);
+        } else if (fileName.endsWith(".mbox")) {
+          const emails = splitMbox(text);
+          allEmails.push(...emails);
+        }
       }
+
+      setProgress({ current: 0, total: allEmails.length, imported: 0, skipped: 0, failed: 0 });
+
+      // バッチに分割して送信
+      for (let i = 0; i < allEmails.length; i += BATCH_SIZE) {
+        if (abortRef.current) break;
+
+        const batch = allEmails.slice(i, i + BATCH_SIZE);
+
+        try {
+          const res = await fetch("/api/import/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ emails: batch }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            totals.imported += data.imported || 0;
+            totals.skipped += data.skipped || 0;
+            totals.failed += data.failed || 0;
+          } else {
+            totals.failed += batch.length;
+          }
+        } catch {
+          totals.failed += batch.length;
+        }
+
+        setProgress({
+          current: Math.min(i + BATCH_SIZE, allEmails.length),
+          total: allEmails.length,
+          imported: totals.imported,
+          skipped: totals.skipped,
+          failed: totals.failed,
+        });
+      }
+
+      setUploadResult(totals);
     } catch {
-      setUploadResult({ imported: 0, skipped: 0, failed: 1, errors: ["通信エラーが発生しました"] });
+      setUploadResult({ imported: 0, skipped: 0, failed: 1 });
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleCancel = () => {
+    abortRef.current = true;
   };
 
   const handleMicrosoftConnect = async () => {
@@ -114,7 +177,7 @@ export default function ImportPage() {
           <h2 className="mb-1 text-lg font-semibold text-gray-900">ファイルからインポート</h2>
           <p className="mb-4 text-sm text-gray-500">
             メーラーからエクスポートした .eml / .mbox ファイルをアップロードしてください。
-            複数ファイルを同時に選択できます。
+            大きなファイルも自動的に分割して処理します。
           </p>
 
           <form onSubmit={handleFileUpload}>
@@ -123,27 +186,51 @@ export default function ImportPage() {
               name="files"
               accept=".eml,.mbox"
               multiple
+              disabled={uploading}
               className="mb-3 block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 hover:file:bg-blue-100"
             />
-            <button
-              type="submit"
-              disabled={uploading}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {uploading ? "インポート中..." : "アップロードしてインポート"}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={uploading}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {uploading ? "インポート中..." : "アップロードしてインポート"}
+              </button>
+              {uploading && (
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  中止
+                </button>
+              )}
+            </div>
           </form>
 
-          {uploadResult && (
+          {/* 進捗バー */}
+          {uploading && progress.total > 0 && (
+            <div className="mt-4 space-y-2">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-blue-600 transition-all"
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-600">
+                {progress.current} / {progress.total} 件処理中
+                （インポート: {progress.imported} / スキップ: {progress.skipped} / 失敗: {progress.failed}）
+              </p>
+            </div>
+          )}
+
+          {/* 結果表示 */}
+          {uploadResult && !uploading && (
             <div className="mt-4 rounded-md bg-gray-50 p-3 text-sm">
-              <p>インポート: {uploadResult.imported}件 / スキップ: {uploadResult.skipped}件 / 失敗: {uploadResult.failed}件</p>
-              {uploadResult.errors.length > 0 && (
-                <ul className="mt-2 list-inside list-disc text-red-600">
-                  {uploadResult.errors.map((err, i) => (
-                    <li key={i}>{err}</li>
-                  ))}
-                </ul>
-              )}
+              <p>
+                完了 - インポート: {uploadResult.imported}件 / スキップ: {uploadResult.skipped}件 / 失敗: {uploadResult.failed}件
+              </p>
             </div>
           )}
         </section>

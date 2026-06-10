@@ -4,7 +4,6 @@ import { createSupabaseServer } from "@/lib/supabase/auth-server";
 import { parseEml, classifyAndSave } from "@/lib/import/parse-email";
 
 export async function POST(request: NextRequest) {
-  // 認証チェック
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -23,56 +22,26 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const formData = await request.formData();
-    const files = formData.getAll("files") as File[];
+    const body = await request.json();
+    const rawEmails: string[] = body.emails || [];
 
-    if (files.length === 0) {
-      return NextResponse.json({ error: "ファイルが選択されていません" }, { status: 400 });
+    if (rawEmails.length === 0) {
+      return NextResponse.json({ error: "メールデータがありません" }, { status: 400 });
     }
 
-    const results = { imported: 0, skipped: 0, failed: 0, errors: [] as string[] };
+    const results = { imported: 0, skipped: 0, failed: 0 };
 
-    for (const file of files) {
+    for (const raw of rawEmails) {
       try {
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const fileName = file.name.toLowerCase();
-
-        if (fileName.endsWith(".eml")) {
-          // 単一EMLファイル
-          const email = await parseEml(buffer);
-          const result = await classifyAndSave(email, profile.tenant_id, supabaseAdmin);
-          if (result.skipped) {
-            results.skipped++;
-          } else {
-            results.imported++;
-          }
-        } else if (fileName.endsWith(".mbox")) {
-          // MBOXファイル（複数メールが連結されたフォーマット）
-          const mboxStr = buffer.toString("utf-8");
-          const emailChunks = mboxStr.split(/^From /m).filter((chunk) => chunk.trim());
-
-          for (const chunk of emailChunks) {
-            try {
-              const rawEmail = "From " + chunk;
-              const email = await parseEml(rawEmail);
-              const result = await classifyAndSave(email, profile.tenant_id, supabaseAdmin);
-              if (result.skipped) {
-                results.skipped++;
-              } else {
-                results.imported++;
-              }
-            } catch (err) {
-              results.failed++;
-              results.errors.push(`MBOX内メール: ${err instanceof Error ? err.message : "不明なエラー"}`);
-            }
-          }
+        const email = await parseEml(raw);
+        const result = await classifyAndSave(email, profile.tenant_id, supabaseAdmin);
+        if (result.skipped) {
+          results.skipped++;
         } else {
-          results.failed++;
-          results.errors.push(`${file.name}: 未対応の形式です（.eml または .mbox のみ）`);
+          results.imported++;
         }
-      } catch (err) {
+      } catch {
         results.failed++;
-        results.errors.push(`${file.name}: ${err instanceof Error ? err.message : "不明なエラー"}`);
       }
     }
 
