@@ -1,0 +1,108 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { createSupabaseServer } from "@/lib/supabase/auth-server";
+import { parseEml, classifyAndSave } from "@/lib/import/parse-email";
+
+const BATCH_SIZE = 10;
+
+type GmailListResponse = {
+  messages?: { id: string }[];
+  nextPageToken?: string;
+};
+
+async function fetchMessageIds(
+  accessToken: string,
+  pageToken?: string
+): Promise<{ ids: string[]; nextPageToken?: string }> {
+  let url = `https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=${BATCH_SIZE}`;
+  if (pageToken) url += `&pageToken=${pageToken}`;
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) throw new Error(`Gmail API failed: ${res.status}`);
+  const data: GmailListResponse = await res.json();
+  return {
+    ids: (data.messages || []).map((m) => m.id),
+    nextPageToken: data.nextPageToken,
+  };
+}
+
+async function fetchRawMessage(accessToken: string, messageId: string): Promise<string> {
+  const res = await fetch(
+    `https://www.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=raw`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (!res.ok) throw new Error(`Gmail API failed: ${res.status}`);
+  const data = await res.json();
+  return Buffer.from(data.raw, "base64url").toString("utf-8");
+}
+
+export async function POST(request: NextRequest) {
+  // 認証チェック
+  const supabase = await createSupabaseServer();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("tenant_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.tenant_id) {
+    return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+  }
+
+  // クッキーからアクセストークン取得
+  const accessToken = request.cookies.get("gmail_access_token")?.value;
+  if (!accessToken) {
+    return NextResponse.json({ error: "Gmail access token not found. Please reconnect." }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const pageToken = body.pageToken || undefined;
+
+    // メッセージID一覧を取得
+    const { ids, nextPageToken } = await fetchMessageIds(accessToken, pageToken);
+
+    let imported = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    // バッチ処理
+    for (const msgId of ids) {
+      try {
+        const rawEmail = await fetchRawMessage(accessToken, msgId);
+        const emailData = await parseEml(rawEmail);
+        const result = await classifyAndSave(emailData, profile.tenant_id, supabaseAdmin);
+
+        if (result.skipped) {
+          skipped++;
+        } else {
+          imported++;
+        }
+      } catch (err) {
+        console.error("Failed to import Gmail message:", err);
+        failed++;
+      }
+    }
+
+    return NextResponse.json({
+      imported,
+      skipped,
+      failed,
+      nextPageToken: nextPageToken || null,
+      hasMore: !!nextPageToken,
+    });
+  } catch (error) {
+    console.error("Gmail fetch error:", error);
+    return NextResponse.json({ error: "Failed to fetch Gmail messages" }, { status: 500 });
+  }
+}

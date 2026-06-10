@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useRef } from "react";
+import { Suspense, useState, useRef, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/header";
 
@@ -28,6 +28,11 @@ function ImportNotification() {
   );
 }
 
+function useOAuthProvider() {
+  const searchParams = useSearchParams();
+  return searchParams.get("provider");
+}
+
 const BATCH_SIZE = 10;
 
 function splitMbox(text: string): string[] {
@@ -45,6 +50,62 @@ export default function ImportPage() {
     failed: number;
   } | null>(null);
   const abortRef = useRef(false);
+
+  // Gmail OAuth バッチインポート
+  const [gmailImporting, setGmailImporting] = useState(false);
+  const [gmailProgress, setGmailProgress] = useState({ imported: 0, skipped: 0, failed: 0 });
+  const [gmailDone, setGmailDone] = useState(false);
+  const gmailAbortRef = useRef(false);
+
+  const startGmailImport = useCallback(async () => {
+    setGmailImporting(true);
+    setGmailDone(false);
+    gmailAbortRef.current = false;
+    const totals = { imported: 0, skipped: 0, failed: 0 };
+    let pageToken: string | null = null;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (gmailAbortRef.current) break;
+
+      try {
+        const res: Response = await fetch("/api/import/google/fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pageToken }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          console.error("Gmail fetch error:", errData.error);
+          break;
+        }
+
+        const data: { imported: number; skipped: number; failed: number; nextPageToken: string | null; hasMore: boolean } = await res.json();
+        totals.imported += data.imported || 0;
+        totals.skipped += data.skipped || 0;
+        totals.failed += data.failed || 0;
+        setGmailProgress({ ...totals });
+
+        if (!data.hasMore) break;
+        pageToken = data.nextPageToken;
+      } catch (err) {
+        console.error("Gmail import error:", err);
+        break;
+      }
+    }
+
+    setGmailImporting(false);
+    setGmailDone(true);
+  }, []);
+
+  // OAuth callback から戻ってきた場合に自動開始
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("provider") === "google" && !gmailImporting && !gmailDone) {
+      startGmailImport();
+    }
+  }, [startGmailImport, gmailImporting, gmailDone]);
 
   const handleFileUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -245,15 +306,42 @@ export default function ImportPage() {
         <section className="rounded-lg border border-gray-200 bg-white p-6">
           <h2 className="mb-1 text-lg font-semibold text-gray-900">Gmail / Google Workspace</h2>
           <p className="mb-4 text-sm text-gray-500">
-            Googleアカウントで認証し、受信メールを一括インポートします。
+            Googleアカウントで認証し、受信メールを全件インポートします。
             パスワードはMailSortには保存されません。
           </p>
-          <button
-            onClick={handleGoogleConnect}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Googleアカウントで接続
-          </button>
+
+          {gmailImporting ? (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                インポート中... （取得: {gmailProgress.imported} / スキップ: {gmailProgress.skipped} / 失敗: {gmailProgress.failed}）
+              </p>
+              <button
+                onClick={() => { gmailAbortRef.current = true; }}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                中止
+              </button>
+            </div>
+          ) : gmailDone ? (
+            <div className="space-y-2">
+              <div className="rounded-md bg-gray-50 p-3 text-sm">
+                完了 - インポート: {gmailProgress.imported}件 / スキップ: {gmailProgress.skipped}件 / 失敗: {gmailProgress.failed}件
+              </div>
+              <button
+                onClick={handleGoogleConnect}
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                再度接続してインポート
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleGoogleConnect}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Googleアカウントで接続
+            </button>
+          )}
         </section>
 
         {/* エクスポート手順ガイド */}
