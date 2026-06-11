@@ -25,6 +25,7 @@ export async function GET() {
   authUrl.searchParams.set("redirect_uri", redirectUri);
   authUrl.searchParams.set("scope", scope);
   authUrl.searchParams.set("access_type", "offline");
+  authUrl.searchParams.set("prompt", "consent");
   authUrl.searchParams.set("state", user.id);
 
   return NextResponse.json({ url: authUrl.toString() });

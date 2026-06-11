@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getAppUrl } from "@/lib/app-url";
+import { saveTokens } from "@/lib/oauth-tokens";
 
-async function exchangeCodeForToken(code: string): Promise<{ access_token: string }> {
+async function exchangeCodeForToken(code: string) {
   const appUrl = getAppUrl();
   const redirectUri = `${appUrl}/api/import/google/callback`;
 
@@ -19,7 +20,11 @@ async function exchangeCodeForToken(code: string): Promise<{ access_token: strin
   });
 
   if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
-  return res.json();
+  return res.json() as Promise<{
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+  }>;
 }
 
 export async function GET(request: NextRequest) {
@@ -33,11 +38,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { access_token } = await exchangeCodeForToken(code);
+    const tokenData = await exchangeCodeForToken(code);
 
-    // アクセストークンをクッキーに一時保存（フロント側でバッチ取得するため）
+    // テナントID取得
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("tenant_id")
+      .eq("id", userId)
+      .single();
+
+    // DBにトークン保存（リフレッシュトークン含む）
+    if (profile?.tenant_id) {
+      await saveTokens(
+        profile.tenant_id,
+        userId,
+        "google",
+        tokenData.access_token,
+        tokenData.refresh_token || null,
+        tokenData.expires_in
+      );
+    }
+
+    // クッキーにも保存（即時インポート用）
     const response = NextResponse.redirect(`${appUrl}/import?provider=google`);
-    response.cookies.set("gmail_access_token", access_token, {
+    response.cookies.set("gmail_access_token", tokenData.access_token, {
       httpOnly: true,
       secure: true,
       sameSite: "lax",

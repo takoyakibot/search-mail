@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { createSupabaseServer } from "@/lib/supabase/auth-server";
 import { parseEml, classifyAndSave } from "@/lib/import/parse-email";
+import { getValidAccessToken } from "@/lib/oauth-tokens";
 
 const BATCH_SIZE = 10;
 
@@ -59,8 +60,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  // クッキーからアクセストークン取得
-  const accessToken = request.cookies.get("gmail_access_token")?.value;
+  // クッキー → DB（リフレッシュ対応）の順でトークン取得
+  let accessToken = request.cookies.get("gmail_access_token")?.value;
+  if (!accessToken) {
+    accessToken = await getValidAccessToken(profile.tenant_id, "google") ?? undefined;
+  }
   if (!accessToken) {
     return NextResponse.json({ error: "Gmail access token not found. Please reconnect." }, { status: 401 });
   }

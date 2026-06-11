@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { createSupabaseServer } from "@/lib/supabase/auth-server";
 import { classifyAndSave, type ParsedEmailData } from "@/lib/import/parse-email";
+import { getValidAccessToken } from "@/lib/oauth-tokens";
 
 const BATCH_SIZE = 10;
 
@@ -82,7 +83,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  const accessToken = request.cookies.get("msgraph_access_token")?.value;
+  let accessToken = request.cookies.get("msgraph_access_token")?.value;
+  if (!accessToken) {
+    accessToken = await getValidAccessToken(profile.tenant_id, "microsoft") ?? undefined;
+  }
   if (!accessToken) {
     return NextResponse.json({ error: "Microsoft access token not found. Please reconnect." }, { status: 401 });
   }
