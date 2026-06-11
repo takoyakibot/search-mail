@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
-import { BackgroundSync } from "@/components/background-sync";
 import { MailFilters } from "@/components/mail-filters";
 import { MailList } from "@/components/mail-list";
 import { Pagination } from "@/components/pagination";
@@ -41,7 +40,7 @@ export default function DashboardPage() {
     localStorage.setItem("mail_cat", category);
     localStorage.setItem("mail_pri", priority);
     localStorage.setItem("mail_st", status);
-  }, [query, category, priority, status]);
+  }, [filtersLoaded, query, category, priority, status]);
 
   const [debouncedQuery, setDebouncedQuery] = useState("");
   useEffect(() => {
@@ -50,10 +49,12 @@ export default function DashboardPage() {
   }, [query]);
 
   useEffect(() => {
+    if (!filtersLoaded) return;
     setPage(1);
-  }, [debouncedQuery, category, priority, status]);
+  }, [debouncedQuery, category, priority, status, filtersLoaded]);
 
   const fetchMails = useCallback(async () => {
+    if (!filtersLoaded) return;
     setLoading(true);
     const params = new URLSearchParams({
       page: String(page),
@@ -78,7 +79,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedQuery, category, priority, status, router]);
+  }, [page, debouncedQuery, category, priority, status, router, filtersLoaded]);
 
   useEffect(() => {
     fetchMails();
@@ -101,21 +102,29 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      <Header onNewMails={fetchMails} />
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
-        <BackgroundSync onNewMails={fetchMails} />
-        <MailFilters
-          query={query}
-          category={category}
-          priority={priority}
-          status={status}
-          onQueryChange={setQuery}
-          onCategoryChange={setCategory}
-          onPriorityChange={setPriority}
-          onStatusChange={setStatus}
-          onClear={() => { setQuery(""); setCategory(""); setPriority(""); setStatus(""); }}
-        />
+        <div className="flex items-end gap-4">
+          <div className="flex-1">
+            <MailFilters
+              query={query}
+              category={category}
+              priority={priority}
+              status={status}
+              onQueryChange={setQuery}
+              onCategoryChange={setCategory}
+              onPriorityChange={setPriority}
+              onStatusChange={setStatus}
+              onClear={() => { setQuery(""); setCategory(""); setPriority(""); setStatus(""); }}
+            />
+          </div>
+          {!loading && (
+            <div className="shrink-0 pb-4 text-sm text-gray-500">
+              {total}件
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div className="py-12 text-center text-gray-500">読み込み中...</div>

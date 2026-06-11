@@ -17,6 +17,16 @@ export async function extractTextFromFile(
       case "docx":
       case "doc":
         return extractWord(buffer);
+      case "txt":
+      case "csv":
+      case "tsv":
+      case "log":
+      case "md":
+      case "html":
+      case "htm":
+      case "xml":
+      case "json":
+        return { text: buffer.toString("utf-8"), isPasswordProtected: false };
       default:
         return { text: "", isPasswordProtected: false };
     }

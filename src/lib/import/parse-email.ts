@@ -135,14 +135,12 @@ export async function classifyAndSave(
     let extractedText = "";
     let attachmentStatus = "pending";
     try {
-      if (fileType !== "other") {
-        const { text, isPasswordProtected } = await extractTextFromFile(att.content, att.fileName);
-        if (isPasswordProtected) {
-          attachmentStatus = "skipped";
-        } else {
-          extractedText = text.slice(0, 10000);
-          attachmentStatus = "processed";
-        }
+      const { text, isPasswordProtected } = await extractTextFromFile(att.content, att.fileName);
+      if (isPasswordProtected) {
+        attachmentStatus = "skipped";
+      } else if (text) {
+        extractedText = text.slice(0, 10000);
+        attachmentStatus = "processed";
       }
     } catch (err) {
       console.error("Failed to extract text from attachment:", err);
