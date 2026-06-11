@@ -66,25 +66,46 @@ function formatSyncTime(iso: string): string {
   return d.toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+async function fetchConnectedProviders(): Promise<string[]> {
+  try {
+    const res = await fetch("/api/import/status");
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.providers || [];
+  } catch {
+    return [];
+  }
+}
+
 export function BackgroundSync({ onNewMails }: { onNewMails?: () => void }) {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [lastSync, setLastSync] = useState<string>(() =>
     typeof window !== "undefined" ? localStorage.getItem("mail_last_sync") || "" : ""
   );
   const [message, setMessage] = useState("");
+  const [syncingProvider, setSyncingProvider] = useState("");
   const hasRun = useRef(false);
 
   const runSync = useCallback(async () => {
     setStatus("syncing");
     setMessage("");
+
+    const providers = await fetchConnectedProviders();
+    if (providers.length === 0) {
+      setStatus("done");
+      return;
+    }
+
     const allResults: SyncResult[] = [];
 
-    const gmailResult = await syncProvider("google");
-    if (gmailResult.imported > 0) allResults.push(gmailResult);
+    for (const provider of providers) {
+      const label = provider === "google" ? "Gmail" : "Microsoft";
+      setSyncingProvider(label);
+      const result = await syncProvider(provider as "google" | "microsoft");
+      if (result.imported > 0) allResults.push(result);
+    }
 
-    const msResult = await syncProvider("microsoft");
-    if (msResult.imported > 0) allResults.push(msResult);
-
+    setSyncingProvider("");
     const now = new Date().toISOString();
     setLastSync(now);
     localStorage.setItem("mail_last_sync", now);
@@ -110,7 +131,7 @@ export function BackgroundSync({ onNewMails }: { onNewMails?: () => void }) {
     <div className="flex items-center justify-between rounded-md border border-gray-200 bg-white px-4 py-2 text-sm">
       <div className="flex items-center gap-3">
         {status === "syncing" ? (
-          <span className="text-blue-600">同期中...</span>
+          <span className="text-blue-600">{syncingProvider ? `${syncingProvider} を同期中...` : "同期中..."}</span>
         ) : (
           <>
             <span className="text-gray-500">
