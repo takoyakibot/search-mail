@@ -20,6 +20,7 @@ async function syncProvider(
   let cursor: string | null = null;
   let totalImported = 0;
   let totalSkipped = 0;
+  let consecutiveSkipBatches = 0;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -39,6 +40,16 @@ async function syncProvider(
       const data = await res.json();
       totalImported += data.imported || 0;
       totalSkipped += data.skipped || 0;
+
+      // バッチ内で新着が0件なら連続スキップカウント増加
+      if ((data.imported || 0) === 0) {
+        consecutiveSkipBatches++;
+      } else {
+        consecutiveSkipBatches = 0;
+      }
+
+      // 2バッチ連続で新着なしなら打ち切り（既知メール領域に到達）
+      if (consecutiveSkipBatches >= 2) break;
 
       if (!data.hasMore) break;
       cursor = provider === "google" ? data.nextPageToken : data.skipToken;
