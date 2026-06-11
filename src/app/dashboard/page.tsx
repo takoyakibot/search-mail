@@ -105,26 +105,18 @@ export default function DashboardPage() {
       <Header onNewMails={fetchMails} />
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
-        <div className="flex items-end gap-4">
-          <div className="flex-1">
-            <MailFilters
-              query={query}
-              category={category}
-              priority={priority}
-              status={status}
-              onQueryChange={setQuery}
-              onCategoryChange={setCategory}
-              onPriorityChange={setPriority}
-              onStatusChange={setStatus}
-              onClear={() => { setQuery(""); setCategory(""); setPriority(""); setStatus(""); }}
-            />
-          </div>
-          {!loading && (
-            <div className="shrink-0 pb-4 text-sm text-gray-500">
-              {total}件
-            </div>
-          )}
-        </div>
+        <MailFilters
+          query={query}
+          category={category}
+          priority={priority}
+          status={status}
+          total={loading ? null : total}
+          onQueryChange={setQuery}
+          onCategoryChange={setCategory}
+          onPriorityChange={setPriority}
+          onStatusChange={setStatus}
+          onClear={() => { setQuery(""); setCategory(""); setPriority(""); setStatus(""); }}
+        />
 
         {loading ? (
           <div className="py-12 text-center text-gray-500">読み込み中...</div>

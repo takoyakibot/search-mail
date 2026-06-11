@@ -5,6 +5,7 @@ type MailFiltersProps = {
   category: string;
   priority: string;
   status: string;
+  total: number | null;
   onQueryChange: (v: string) => void;
   onCategoryChange: (v: string) => void;
   onPriorityChange: (v: string) => void;
@@ -26,6 +27,7 @@ export function MailFilters({
   onPriorityChange,
   onStatusChange,
   onClear,
+  total,
 }: MailFiltersProps) {
   const hasFilters = query || category || priority || status;
   return (
@@ -87,6 +89,9 @@ export function MailFilters({
             クリア
           </button>
         )}
+        <div className="ml-auto text-sm text-gray-500">
+          {total !== null && `${total}件`}
+        </div>
       </div>
     </div>
   );
