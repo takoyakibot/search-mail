@@ -74,30 +74,43 @@ export async function classifyAndSave(
     email.sender
   );
 
-  // メール保存
+  // メール保存（重複時はスキップ）
   const { data: mail, error } = await supabaseAdmin
     .from("mails")
-    .insert({
-      tenant_id: tenantId,
-      message_id: email.messageId,
-      subject: email.subject,
-      sender: email.sender,
-      sender_name: email.senderName,
-      received_at: email.receivedAt,
-      body_text: email.bodyText,
-      body_summary: classification.summary,
-      category: classification.category,
-      priority: classification.priority,
-      related_people: classification.related_people,
-      action_required: classification.action_required,
-      tags: classification.tags,
-      ai_raw_response: classification as unknown as Record<string, unknown>,
-    })
+    .upsert(
+      {
+        tenant_id: tenantId,
+        message_id: email.messageId,
+        subject: email.subject,
+        sender: email.sender,
+        sender_name: email.senderName,
+        received_at: email.receivedAt,
+        body_text: email.bodyText,
+        body_summary: classification.summary,
+        category: classification.category,
+        priority: classification.priority,
+        related_people: classification.related_people,
+        action_required: classification.action_required,
+        tags: classification.tags,
+        ai_raw_response: classification as unknown as Record<string, unknown>,
+      },
+      { onConflict: "message_id", ignoreDuplicates: true }
+    )
     .select("id")
     .single();
 
-  if (error || !mail) {
-    throw new Error(`Failed to save mail: ${error?.message}`);
+  // upsert + ignoreDuplicates の場合、重複時は data が null になる
+  if (!mail) {
+    // 重複で挿入されなかった → 既存レコードを取得
+    const { data: existing } = await supabaseAdmin
+      .from("mails")
+      .select("id")
+      .eq("message_id", email.messageId)
+      .single();
+
+    if (existing) return { skipped: true, mailId: existing.id };
+    if (error) throw new Error(`Failed to save mail: ${error?.message}`);
+    return { skipped: true, mailId: null };
   }
 
   // 添付ファイル保存
