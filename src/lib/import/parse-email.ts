@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { classifyMail } from "@/lib/classify-mail";
 import { getAppUrl } from "@/lib/app-url";
 import { extractTextFromFile } from "@/lib/attachments/extract-text";
+import { isNewsletter, isExcludedSender } from "@/lib/import/newsletter-filter";
 
 export type ParsedEmailData = {
   messageId: string | null;
@@ -11,6 +12,7 @@ export type ParsedEmailData = {
   senderName: string;
   receivedAt: string;
   bodyText: string;
+  rawHeaders?: string;
   attachments: {
     fileName: string;
     contentType: string;
@@ -39,6 +41,11 @@ export async function parseEml(raw: Buffer | string): Promise<ParsedEmailData> {
   const messageId = parsed.messageId
     || `hash-${crypto.createHash("sha256").update(`${parsed.subject || ""}|${sender}|${parsed.date?.toISOString() || ""}|${bodyText.slice(0, 200)}`).digest("hex").slice(0, 16)}`;
 
+  // ヘッダーをテキスト化（メルマガ判定用）
+  const rawHeaders = parsed.headerLines
+    ?.map((h: { key: string; line: string }) => h.line)
+    .join("\n") || "";
+
   return {
     messageId,
     subject: parsed.subject || "(件名なし)",
@@ -46,6 +53,7 @@ export async function parseEml(raw: Buffer | string): Promise<ParsedEmailData> {
     senderName: extractSenderName(sender),
     receivedAt: parsed.date?.toISOString() || new Date().toISOString(),
     bodyText,
+    rawHeaders,
     attachments,
   };
 }
@@ -56,6 +64,25 @@ export async function classifyAndSave(
   tenantId: string,
   supabaseAdmin: any
 ) {
+  // メルマガ・除外送信者フィルター
+  const { data: tenantSettings } = await supabaseAdmin
+    .from("tenants")
+    .select("skip_newsletters, exclude_senders")
+    .eq("id", tenantId)
+    .single();
+
+  if (tenantSettings?.skip_newsletters) {
+    if (isNewsletter({ sender: email.sender, subject: email.subject, headers: email.rawHeaders })) {
+      return { skipped: true, mailId: null, reason: "newsletter" };
+    }
+  }
+
+  if (tenantSettings?.exclude_senders?.length > 0) {
+    if (isExcludedSender(email.sender, tenantSettings.exclude_senders)) {
+      return { skipped: true, mailId: null, reason: "excluded_sender" };
+    }
+  }
+
   // 重複チェック
   if (email.messageId) {
     const { data: existing } = await supabaseAdmin
