@@ -18,10 +18,25 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const limit = 50;
 
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState("");
-  const [status, setStatus] = useState("");
+  const [query, setQuery] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mail_q") || "" : ""
+  );
+  const [category, setCategory] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mail_cat") || "" : ""
+  );
+  const [priority, setPriority] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mail_pri") || "" : ""
+  );
+  const [status, setStatus] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mail_st") || "" : ""
+  );
+
+  useEffect(() => {
+    localStorage.setItem("mail_q", query);
+    localStorage.setItem("mail_cat", category);
+    localStorage.setItem("mail_pri", priority);
+    localStorage.setItem("mail_st", status);
+  }, [query, category, priority, status]);
 
   const [debouncedQuery, setDebouncedQuery] = useState("");
   useEffect(() => {
