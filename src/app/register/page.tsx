@@ -5,6 +5,51 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowser } from "@/lib/supabase/browser";
 
+function SocialLoginButtons() {
+  const handleSocialLogin = async (provider: "google" | "azure") => {
+    const supabase = createSupabaseBrowser();
+    const redirectTo = `${window.location.origin}/auth/callback`;
+
+    const scopes =
+      provider === "google"
+        ? "https://www.googleapis.com/auth/gmail.readonly"
+        : "https://graph.microsoft.com/Mail.Read offline_access";
+
+    await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo, scopes },
+    });
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <button
+          onClick={() => handleSocialLogin("google")}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Google で登録
+        </button>
+        <button
+          onClick={() => handleSocialLogin("azure")}
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Microsoft で登録
+        </button>
+      </div>
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-200" />
+        </div>
+        <div className="relative flex justify-center text-xs">
+          <span className="bg-white px-2 text-gray-400">または</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [tenantName, setTenantName] = useState("");
@@ -72,6 +117,8 @@ export default function RegisterPage() {
           <h1 className="text-2xl font-bold text-gray-900">MailSort</h1>
           <p className="mt-1 text-sm text-gray-500">新規登録</p>
         </div>
+
+        <SocialLoginButtons />
 
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
