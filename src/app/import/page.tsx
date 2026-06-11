@@ -99,13 +99,64 @@ export default function ImportPage() {
     setGmailDone(true);
   }, []);
 
+  // Microsoft バッチインポート
+  const [msImporting, setMsImporting] = useState(false);
+  const [msProgress, setMsProgress] = useState({ imported: 0, skipped: 0, failed: 0 });
+  const [msDone, setMsDone] = useState(false);
+  const msAbortRef = useRef(false);
+
+  const startMsImport = useCallback(async () => {
+    setMsImporting(true);
+    setMsDone(false);
+    msAbortRef.current = false;
+    const totals = { imported: 0, skipped: 0, failed: 0 };
+    let skipToken: string | null = null;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (msAbortRef.current) break;
+
+      try {
+        const res: Response = await fetch("/api/import/microsoft/fetch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skipToken }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          console.error("Microsoft fetch error:", errData.error);
+          break;
+        }
+
+        const data: { imported: number; skipped: number; failed: number; skipToken: string | null; hasMore: boolean } = await res.json();
+        totals.imported += data.imported || 0;
+        totals.skipped += data.skipped || 0;
+        totals.failed += data.failed || 0;
+        setMsProgress({ ...totals });
+
+        if (!data.hasMore) break;
+        skipToken = data.skipToken;
+      } catch (err) {
+        console.error("Microsoft import error:", err);
+        break;
+      }
+    }
+
+    setMsImporting(false);
+    setMsDone(true);
+  }, []);
+
   // OAuth callback から戻ってきた場合に自動開始
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("provider") === "google" && !gmailImporting && !gmailDone) {
+    const provider = params.get("provider");
+    if (provider === "google" && !gmailImporting && !gmailDone) {
       startGmailImport();
+    } else if (provider === "microsoft" && !msImporting && !msDone) {
+      startMsImport();
     }
-  }, [startGmailImport, gmailImporting, gmailDone]);
+  }, [startGmailImport, gmailImporting, gmailDone, startMsImport, msImporting, msDone]);
 
   const handleFileUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -291,15 +342,42 @@ export default function ImportPage() {
         <section className="rounded-lg border border-gray-200 bg-white p-6">
           <h2 className="mb-1 text-lg font-semibold text-gray-900">Microsoft 365 / Exchange Online</h2>
           <p className="mb-4 text-sm text-gray-500">
-            Microsoftアカウントで認証し、受信メールを一括インポートします。
+            Microsoftアカウントで認証し、受信メールを全件インポートします。
             パスワードはMailSortには保存されません。
           </p>
-          <button
-            onClick={handleMicrosoftConnect}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Microsoftアカウントで接続
-          </button>
+
+          {msImporting ? (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                インポート中... （取得: {msProgress.imported} / スキップ: {msProgress.skipped} / 失敗: {msProgress.failed}）
+              </p>
+              <button
+                onClick={() => { msAbortRef.current = true; }}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                中止
+              </button>
+            </div>
+          ) : msDone ? (
+            <div className="space-y-2">
+              <div className="rounded-md bg-gray-50 p-3 text-sm">
+                完了 - インポート: {msProgress.imported}件 / スキップ: {msProgress.skipped}件 / 失敗: {msProgress.failed}件
+              </div>
+              <button
+                onClick={handleMicrosoftConnect}
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                再度接続してインポート
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleMicrosoftConnect}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Microsoftアカウントで接続
+            </button>
+          )}
         </section>
 
         {/* 3. Gmail / Google Workspace */}
