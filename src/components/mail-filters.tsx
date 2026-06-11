@@ -9,6 +9,7 @@ type MailFiltersProps = {
   onCategoryChange: (v: string) => void;
   onPriorityChange: (v: string) => void;
   onStatusChange: (v: string) => void;
+  onClear: () => void;
 };
 
 const categories = ["人材関連", "案件・プロジェクト", "アンケート・調査", "営業・受注", "その他"];
@@ -24,7 +25,9 @@ export function MailFilters({
   onCategoryChange,
   onPriorityChange,
   onStatusChange,
+  onClear,
 }: MailFiltersProps) {
+  const hasFilters = query || category || priority || status;
   return (
     <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
       <div>
@@ -36,7 +39,7 @@ export function MailFilters({
           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap items-end gap-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-gray-600">カテゴリ</label>
           <select
@@ -76,6 +79,14 @@ export function MailFilters({
             ))}
           </select>
         </div>
+        {hasFilters && (
+          <button
+            onClick={onClear}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            クリア
+          </button>
+        )}
       </div>
     </div>
   );

@@ -108,6 +108,7 @@ export default function DashboardPage() {
           onCategoryChange={setCategory}
           onPriorityChange={setPriority}
           onStatusChange={setStatus}
+          onClear={() => { setQuery(""); setCategory(""); setPriority(""); setStatus(""); }}
         />
 
         {loading ? (
