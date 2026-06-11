@@ -4,7 +4,7 @@ import { createSupabaseServer } from "@/lib/supabase/auth-server";
 import { classifyAndSave, type ParsedEmailData } from "@/lib/import/parse-email";
 import { getValidAccessToken } from "@/lib/oauth-tokens";
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 20;
 
 type GraphMessage = {
   id: string;
@@ -101,8 +101,9 @@ export async function POST(request: NextRequest) {
     let skipped = 0;
     let failed = 0;
 
-    for (const msg of messages) {
-      try {
+    // メール解析・保存を並列実行
+    const saveResults = await Promise.allSettled(
+      messages.map(async (msg) => {
         const bodyText = msg.body.contentType === "html"
           ? stripHtml(msg.body.content)
           : msg.body.content;
@@ -130,15 +131,18 @@ export async function POST(request: NextRequest) {
           attachments,
         };
 
-        const result = await classifyAndSave(emailData, profile.tenant_id, supabaseAdmin);
-        if (result.skipped) {
-          skipped++;
-        } else {
-          imported++;
-        }
-      } catch (err) {
-        console.error("Failed to import message:", err);
+        return classifyAndSave(emailData, profile.tenant_id, supabaseAdmin);
+      })
+    );
+
+    for (const result of saveResults) {
+      if (result.status === "rejected") {
+        console.error("Failed to import message:", result.reason);
         failed++;
+      } else if (result.value.skipped) {
+        skipped++;
+      } else {
+        imported++;
       }
     }
 

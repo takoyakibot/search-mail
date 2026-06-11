@@ -4,7 +4,7 @@ import { createSupabaseServer } from "@/lib/supabase/auth-server";
 import { parseEml, classifyAndSave } from "@/lib/import/parse-email";
 import { getValidAccessToken } from "@/lib/oauth-tokens";
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 20;
 
 type GmailListResponse = {
   messages?: { id: string }[];
@@ -76,25 +76,32 @@ export async function POST(request: NextRequest) {
     // メッセージID一覧を取得
     const { ids, nextPageToken } = await fetchMessageIds(accessToken, pageToken);
 
+    // メール本文を並列取得
+    const rawEmails = await Promise.allSettled(
+      ids.map((msgId) => fetchRawMessage(accessToken, msgId))
+    );
+
     let imported = 0;
     let skipped = 0;
     let failed = 0;
 
-    // バッチ処理
-    for (const msgId of ids) {
-      try {
-        const rawEmail = await fetchRawMessage(accessToken, msgId);
-        const emailData = await parseEml(rawEmail);
-        const result = await classifyAndSave(emailData, profile.tenant_id, supabaseAdmin);
+    // 解析・保存を並列実行
+    const saveResults = await Promise.allSettled(
+      rawEmails.map(async (result) => {
+        if (result.status === "rejected") throw result.reason;
+        const emailData = await parseEml(result.value);
+        return classifyAndSave(emailData, profile.tenant_id, supabaseAdmin);
+      })
+    );
 
-        if (result.skipped) {
-          skipped++;
-        } else {
-          imported++;
-        }
-      } catch (err) {
-        console.error("Failed to import Gmail message:", err);
+    for (const result of saveResults) {
+      if (result.status === "rejected") {
+        console.error("Failed to import Gmail message:", result.reason);
         failed++;
+      } else if (result.value.skipped) {
+        skipped++;
+      } else {
+        imported++;
       }
     }
 
