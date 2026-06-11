@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
 
     let imported = 0;
     let skipped = 0;
+    let filtered = 0;
     let failed = 0;
 
     // メール解析・保存を並列実行
@@ -139,6 +140,8 @@ export async function POST(request: NextRequest) {
       if (result.status === "rejected") {
         console.error("Failed to import message:", result.reason);
         failed++;
+      } else if (result.value.reason === "newsletter" || result.value.reason === "excluded_sender") {
+        filtered++;
       } else if (result.value.skipped) {
         skipped++;
       } else {
@@ -149,6 +152,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       imported,
       skipped,
+      filtered,
       failed,
       skipToken: nextLink,
       hasMore: !!nextLink,

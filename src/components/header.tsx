@@ -41,7 +41,9 @@ async function syncProvider(provider: "google" | "microsoft") {
       const data = await res.json();
       totalImported += data.imported || 0;
 
-      if ((data.imported || 0) === 0) {
+      // imported も filtered もゼロ = 全件が既知（重複スキップ）
+      const hasNewActivity = (data.imported || 0) > 0 || (data.filtered || 0) > 0;
+      if (!hasNewActivity) {
         consecutiveSkipBatches++;
       } else {
         consecutiveSkipBatches = 0;
