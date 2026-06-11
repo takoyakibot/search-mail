@@ -2,6 +2,7 @@ import { simpleParser, type ParsedMail } from "mailparser";
 import crypto from "crypto";
 import { classifyMail } from "@/lib/classify-mail";
 import { getAppUrl } from "@/lib/app-url";
+import { extractTextFromFile } from "@/lib/attachments/extract-text";
 
 export type ParsedEmailData = {
   messageId: string | null;
@@ -117,7 +118,24 @@ export async function classifyAndSave(
             ? "word"
             : "other";
 
-    const { data: inserted } = await supabaseAdmin
+    // テキスト抽出（AI無し）
+    let extractedText = "";
+    let attachmentStatus = "pending";
+    try {
+      if (fileType !== "other") {
+        const { text, isPasswordProtected } = await extractTextFromFile(att.content, att.fileName);
+        if (isPasswordProtected) {
+          attachmentStatus = "skipped";
+        } else {
+          extractedText = text.slice(0, 10000);
+          attachmentStatus = "processed";
+        }
+      }
+    } catch (err) {
+      console.error("Failed to extract text from attachment:", err);
+    }
+
+    await supabaseAdmin
       .from("attachments")
       .insert({
         mail_id: mail.id,
@@ -125,23 +143,9 @@ export async function classifyAndSave(
         file_name: att.fileName,
         file_type: fileType,
         storage_path: storagePath,
-        status: "pending",
-      })
-      .select("id")
-      .single();
-
-    // 非同期解析キック
-    if (inserted) {
-      const appUrl = getAppUrl();
-      fetch(`${appUrl}/api/attachments/process`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-        body: JSON.stringify({ attachmentId: inserted.id }),
-      }).catch((err) => console.error("Failed to kick attachment processing:", err));
-    }
+        extracted_text: extractedText,
+        status: attachmentStatus,
+      });
   }
 
   return { skipped: false, mailId: mail.id };
