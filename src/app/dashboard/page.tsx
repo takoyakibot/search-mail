@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/header";
+import { BackgroundSync } from "@/components/background-sync";
 import { MailFilters } from "@/components/mail-filters";
 import { MailList } from "@/components/mail-list";
 import { Pagination } from "@/components/pagination";
@@ -99,6 +100,7 @@ export default function DashboardPage() {
       <Header />
 
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-6">
+        <BackgroundSync onNewMails={fetchMails} />
         <MailFilters
           query={query}
           category={category}
