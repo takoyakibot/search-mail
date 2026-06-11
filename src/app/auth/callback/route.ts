@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
   }
 
   // プロバイダートークンをDBに保存（メールインポート用）
+  console.log(`Auth callback: provider=${provider}, hasProviderToken=${!!providerToken}, hasRefreshToken=${!!providerRefreshToken}, tenantId=${tenantId}`);
   if (tenantId && providerToken) {
     const tokenProvider = isGoogle ? "google" : isMicrosoft ? "microsoft" : null;
     if (tokenProvider) {
