@@ -79,9 +79,7 @@ async function fetchConnectedProviders(): Promise<string[]> {
 
 export function BackgroundSync({ onNewMails }: { onNewMails?: () => void }) {
   const [status, setStatus] = useState<SyncStatus>("idle");
-  const [lastSync, setLastSync] = useState<string>(() =>
-    typeof window !== "undefined" ? localStorage.getItem("mail_last_sync") || "" : ""
-  );
+  const [lastSync, setLastSync] = useState<string>("");
   const [message, setMessage] = useState("");
   const [syncingProvider, setSyncingProvider] = useState("");
   const hasRun = useRef(false);
@@ -120,8 +118,9 @@ export function BackgroundSync({ onNewMails }: { onNewMails?: () => void }) {
     }
   }, [onNewMails]);
 
-  // 初回自動実行
+  // localStorage から復元 + 初回自動実行
   useEffect(() => {
+    setLastSync(localStorage.getItem("mail_last_sync") || "");
     if (hasRun.current) return;
     hasRun.current = true;
     runSync();

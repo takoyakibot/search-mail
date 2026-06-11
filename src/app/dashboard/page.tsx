@@ -19,20 +19,24 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const limit = 50;
 
-  const [query, setQuery] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("mail_q") || "" : ""
-  );
-  const [category, setCategory] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("mail_cat") || "" : ""
-  );
-  const [priority, setPriority] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("mail_pri") || "" : ""
-  );
-  const [status, setStatus] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem("mail_st") || "" : ""
-  );
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [priority, setPriority] = useState("");
+  const [status, setStatus] = useState("");
+  const [filtersLoaded, setFiltersLoaded] = useState(false);
 
+  // localStorage から復元
   useEffect(() => {
+    setQuery(localStorage.getItem("mail_q") || "");
+    setCategory(localStorage.getItem("mail_cat") || "");
+    setPriority(localStorage.getItem("mail_pri") || "");
+    setStatus(localStorage.getItem("mail_st") || "");
+    setFiltersLoaded(true);
+  }, []);
+
+  // localStorage に保存
+  useEffect(() => {
+    if (!filtersLoaded) return;
     localStorage.setItem("mail_q", query);
     localStorage.setItem("mail_cat", category);
     localStorage.setItem("mail_pri", priority);
