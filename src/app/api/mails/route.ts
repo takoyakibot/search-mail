@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { createSupabaseServer } from "@/lib/supabase/auth-server";
 
 export async function GET(request: NextRequest) {
-  // 認証チェック
   const supabase = await createSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -11,7 +10,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // プロフィールからテナントID取得
   const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("tenant_id")
@@ -32,6 +30,20 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = parseInt(searchParams.get("limit") || "50", 10);
 
+  // キーワード検索時、添付ファイルのテキストにマッチするメールIDも取得
+  let attachmentMailIds: string[] = [];
+  if (q) {
+    const { data: attMatches } = await supabaseAdmin
+      .from("attachments")
+      .select("mail_id")
+      .eq("tenant_id", profile.tenant_id)
+      .ilike("extracted_text", `%${q}%`);
+
+    if (attMatches && attMatches.length > 0) {
+      attachmentMailIds = [...new Set(attMatches.map((a: { mail_id: string }) => a.mail_id).filter(Boolean))];
+    }
+  }
+
   let query = supabaseAdmin
     .from("mails")
     .select("*", { count: "exact" })
@@ -40,9 +52,13 @@ export async function GET(request: NextRequest) {
     .range((page - 1) * limit, page * limit - 1);
 
   if (q) {
-    query = query.or(
-      `subject.ilike.%${q}%,body_text.ilike.%${q}%,sender.ilike.%${q}%,sender_name.ilike.%${q}%`
-    );
+    // メール本体の検索 OR 添付ファイルにマッチしたメールID
+    const textFilter = `subject.ilike.%${q}%,body_text.ilike.%${q}%,sender.ilike.%${q}%,sender_name.ilike.%${q}%`;
+    if (attachmentMailIds.length > 0) {
+      query = query.or(`${textFilter},id.in.(${attachmentMailIds.join(",")})`);
+    } else {
+      query = query.or(textFilter);
+    }
   }
   if (category) query = query.eq("category", category);
   if (priority) query = query.eq("priority", priority);
