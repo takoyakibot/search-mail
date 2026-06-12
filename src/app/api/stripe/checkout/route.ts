@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe, PLANS } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { createSupabaseServer } from "@/lib/supabase/auth-server";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function POST(request: NextRequest) {
   if (!stripe) {
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   // 既存の Stripe Customer がある場合はそれを使う
   let customerId = tenant.stripe_customer_id;

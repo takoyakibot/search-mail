@@ -1,8 +1,75 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+export type ClassifyResult = {
+  category: string;
+  priority: string;
+  summary: string;
+  related_people: string[];
+  action_required: boolean;
+  tags: string[];
+};
+
+// ========================================
+// ルールベース分類（コストゼロ）
+// ========================================
+
+const categoryRules: { keywords: string[]; category: string }[] = [
+  { keywords: ["スキルシート", "経歴書", "要員", "技術者", "エンジニア", "人材", "アサイン", "稼働", "参画"], category: "人材関連" },
+  { keywords: ["案件", "プロジェクト", "PJ", "開発", "構築", "運用", "保守", "要件定義"], category: "案件・プロジェクト" },
+  { keywords: ["アンケート", "調査", "回答", "ヒアリング", "フィードバック"], category: "アンケート・調査" },
+  { keywords: ["見積", "契約", "受注", "発注", "請求", "納品", "商談", "提案"], category: "営業・受注" },
+];
+
+const urgencyKeywords = ["至急", "緊急", "急ぎ", "ASAP", "本日中", "今日中", "明日まで"];
+const actionKeywords = ["ご確認ください", "ご対応", "ご返信", "お願い", "依頼", "要回答"];
+
+function classifyByRule(subject: string, body: string): ClassifyResult {
+  const text = `${subject} ${body}`.toLowerCase();
+  const originalText = `${subject} ${body}`;
+
+  // カテゴリ判定
+  let category = "その他";
+  for (const rule of categoryRules) {
+    if (rule.keywords.some((kw) => originalText.includes(kw))) {
+      category = rule.category;
+      break;
+    }
+  }
+
+  // 優先度判定
+  let priority = "低";
+  if (urgencyKeywords.some((kw) => originalText.includes(kw))) {
+    priority = "高";
+  } else if (actionKeywords.some((kw) => originalText.includes(kw))) {
+    priority = "中";
+  }
+
+  // 要対応判定
+  const actionRequired = actionKeywords.some((kw) => originalText.includes(kw));
+
+  // 簡易要約（件名をそのまま使う）
+  const summary = subject.slice(0, 50) || "(件名なし)";
+
+  // 簡易タグ
+  const tags: string[] = [];
+  if (text.includes("スキルシート") || text.includes("経歴書")) tags.push("スキルシート");
+  if (text.includes("見積")) tags.push("見積");
+  if (text.includes("契約")) tags.push("契約");
+  if (urgencyKeywords.some((kw) => originalText.includes(kw))) tags.push("急ぎ");
+
+  return {
+    category,
+    priority,
+    summary,
+    related_people: [],
+    action_required: actionRequired,
+    tags,
+  };
+}
+
+// ========================================
+// AI分類（Claude API）
+// ========================================
 
 const systemPrompt = `あなたはSES企業のメール分類AIです。
 受信したメールを分析し、以下のJSON形式で返してください。
@@ -22,15 +89,6 @@ JSON以外は絶対に出力しないでください。
 - 中：1週間以内の対応が必要
 - 低：情報共有、FYI、定期連絡`;
 
-export type ClassifyResult = {
-  category: string;
-  priority: string;
-  summary: string;
-  related_people: string[];
-  action_required: boolean;
-  tags: string[];
-};
-
 const fallbackResult: ClassifyResult = {
   category: "その他",
   priority: "低",
@@ -40,11 +98,15 @@ const fallbackResult: ClassifyResult = {
   tags: [],
 };
 
-export async function classifyMail(
+async function classifyByAI(
   subject: string,
   body: string,
   sender: string
 ): Promise<ClassifyResult> {
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY!,
+  });
+
   const truncatedBody = body.slice(0, 500);
 
   const userMessage = `件名: ${subject}
@@ -62,10 +124,27 @@ ${truncatedBody}`;
 
     const text =
       response.content[0].type === "text" ? response.content[0].text : "";
-    const parsed = JSON.parse(text) as ClassifyResult;
-    return parsed;
+    return JSON.parse(text) as ClassifyResult;
   } catch (error) {
     console.error("Claude API classification failed:", error);
     return fallbackResult;
   }
+}
+
+// ========================================
+// エントリポイント（環境変数で切り替え）
+// ========================================
+
+export async function classifyMail(
+  subject: string,
+  body: string,
+  sender: string
+): Promise<ClassifyResult> {
+  const mode = process.env.CLASSIFY_MODE || "ai";
+
+  if (mode === "rule") {
+    return classifyByRule(subject, body);
+  }
+
+  return classifyByAI(subject, body, sender);
 }

@@ -1,5 +1,4 @@
 import * as XLSX from "xlsx";
-import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 
 export async function extractTextFromFile(
@@ -18,13 +17,22 @@ export async function extractTextFromFile(
       case "docx":
       case "doc":
         return extractWord(buffer);
+      case "txt":
+      case "csv":
+      case "tsv":
+      case "log":
+      case "md":
+      case "html":
+      case "htm":
+      case "xml":
+      case "json":
+        return { text: buffer.toString("utf-8"), isPasswordProtected: false };
       default:
         return { text: "", isPasswordProtected: false };
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // パスワード保護の検出
     if (
       errorMessage.includes("password") ||
       errorMessage.includes("encrypted") ||
@@ -52,10 +60,16 @@ function extractExcel(buffer: Buffer): { text: string; isPasswordProtected: bool
 }
 
 async function extractPdf(buffer: Buffer): Promise<{ text: string; isPasswordProtected: boolean }> {
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  const result = await parser.getText();
-  const text = result.text ?? "";
-  return { text, isPasswordProtected: false };
+  try {
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    const result = await parser.getText();
+    const text = result.text ?? "";
+    return { text, isPasswordProtected: false };
+  } catch (error) {
+    console.error("PDF extraction failed (may not be supported in this environment):", error);
+    return { text: "", isPasswordProtected: false };
+  }
 }
 
 async function extractWord(buffer: Buffer): Promise<{ text: string; isPasswordProtected: boolean }> {
